@@ -53,7 +53,8 @@ If screenshots already landed in your library, use the main app instead: **Pick 
 - **Colors** — red, blue, green, yellow. That's it, on purpose.
 - **Fill styles** — opaque, 50% transparent, or no fill (color becomes a 2pt stroke)
 - **Auto-contrast text** — text inside shapes is black or white, chosen by the app for contrast; not editable
-- **Undo / redo** — per screenshot, covers everything including crop
+- **Undo / redo** — gesture-driven: two-finger tap the canvas to undo, three-finger tap to redo. Per screenshot, covers everything including crop
+- **Native UI** — system navigation and toolbars (Liquid Glass on iOS 26), segmented tool picker, native menus for tool options
 - **Dark mode only**
 
 ## Architecture

@@ -12,16 +12,50 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    header
-                    pickerButton
-                    workflowCard
-                    pinCard
+            List {
+                Section {
+                    PhotosPicker(
+                        selection: $selection,
+                        maxSelectionCount: 10,
+                        matching: .images,
+                        photoLibrary: .shared()
+                    ) {
+                        Label(isLoading ? "Loading…" : "Pick Screenshots",
+                              systemImage: "photo.on.rectangle.angled")
+                    }
+                    .disabled(isLoading)
+                } footer: {
+                    Text("Edit up to 10 screenshots at once, then save them all back to your photo library.")
                 }
-                .padding(20)
+
+                Section {
+                    Label("Take a screenshot", systemImage: "1.circle")
+                    Label("Tap the thumbnail, then the share icon", systemImage: "2.circle")
+                    Label("Pick Red Pen, mark it up, tap Save", systemImage: "3.circle")
+                    Label("Close the preview and choose Delete Screenshot", systemImage: "4.circle")
+                } header: {
+                    Text("Zero-original workflow")
+                } footer: {
+                    Text("The original never lands in your photo library — only the marked-up copy does.")
+                }
+
+                Section {
+                    Label("Undo: tap the canvas with two fingers", systemImage: "hand.tap")
+                    Label("Redo: tap the canvas with three fingers", systemImage: "hand.tap.fill")
+                } header: {
+                    Text("Editor gestures")
+                }
+
+                Section {
+                    Label("Open any share sheet and scroll the app row to the end", systemImage: "1.circle")
+                    Label("Tap More, then Edit", systemImage: "2.circle")
+                    Label("Add Red Pen to Favorites and drag it to the front", systemImage: "3.circle")
+                } header: {
+                    Text("Show Red Pen first in the share sheet")
+                } footer: {
+                    Text("Favorites always appear first — right where Mail sits.")
+                }
             }
-            .background(Color.black.ignoresSafeArea())
             .navigationTitle("Red Pen")
         }
         .fullScreenCover(item: $session) { activeSession in
@@ -63,78 +97,6 @@ struct HomeView: View {
             guard !items.isEmpty else { return }
             loadSelection(items)
         }
-    }
-
-    private var header: some View {
-        Text("Mark up screenshots fast. Pen, shapes, crop — then save and move on.")
-            .font(.system(size: 17))
-            .foregroundColor(.white.opacity(0.7))
-    }
-
-    private var pickerButton: some View {
-        PhotosPicker(
-            selection: $selection,
-            maxSelectionCount: 10,
-            matching: .images,
-            photoLibrary: .shared()
-        ) {
-            HStack {
-                Image(systemName: "photo.on.rectangle.angled")
-                Text(isLoading ? "Loading…" : "Pick Screenshots")
-                    .font(.system(size: 17, weight: .semibold))
-            }
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
-            .foregroundColor(.black)
-        }
-        .disabled(isLoading)
-    }
-
-    private var workflowCard: some View {
-        card(
-            title: "The zero-original workflow",
-            icon: "bolt.fill",
-            lines: [
-                "1. Take a screenshot.",
-                "2. Tap the screenshot thumbnail, then the share icon.",
-                "3. Pick Red Pen, mark it up, hit Save.",
-                "4. Close the preview and choose Delete Screenshot.",
-            ],
-            footnote: "The original never lands in your photo library — only the marked-up copy does."
-        )
-    }
-
-    private var pinCard: some View {
-        card(
-            title: "Put Red Pen up front in the share sheet",
-            icon: "square.and.arrow.up",
-            lines: [
-                "1. Open any share sheet and scroll the app row to the end.",
-                "2. Tap More, then Edit.",
-                "3. Add Red Pen to Favorites and drag it to the front.",
-            ],
-            footnote: "iOS controls share sheet order, but favorites always show first — right where Mail sits."
-        )
-    }
-
-    private func card(title: String, icon: String, lines: [String], footnote: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-            ForEach(lines, id: \.self) { line in
-                Text(line)
-                    .font(.system(size: 15))
-                    .foregroundColor(.white.opacity(0.75))
-            }
-            Text(footnote)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.45))
-                .padding(.top, 2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func loadSelection(_ items: [PhotosPickerItem]) {

@@ -10,7 +10,7 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
+        view.backgroundColor = .systemBackground
         overrideUserInterfaceStyle = .dark
 
         let spinner = UIActivityIndicatorView(style: .large)
@@ -72,7 +72,7 @@ final class ShareViewController: UIViewController {
         }
 
         let host = UIHostingController(rootView: editor)
-        host.view.backgroundColor = .black
+        host.view.backgroundColor = .systemBackground
         addChild(host)
         host.view.frame = view.bounds
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]

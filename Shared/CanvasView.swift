@@ -56,6 +56,8 @@ struct CanvasView: View {
                 strokesLayer(doc: doc, t: t)
                     .contentShape(Rectangle())
                     .gesture(drawGesture(doc: doc, t: t))
+                    .gesture(MultiFingerTapGesture(fingers: 2) { session.undo() })
+                    .gesture(MultiFingerTapGesture(fingers: 3) { session.redo() })
 
                 ForEach(doc.shapes) { shape in
                     shapeView(shape, doc: doc, t: t)
@@ -271,6 +273,27 @@ struct CanvasView: View {
         r.origin.x = min(max(r.origin.x, bounds.minX - r.width / 2), bounds.maxX - r.width / 2)
         r.origin.y = min(max(r.origin.y, bounds.minY - r.height / 2), bounds.maxY - r.height / 2)
         return r
+    }
+}
+
+// Undo/redo are gesture-driven: two-finger tap = undo, three-finger tap = redo.
+// UIGestureRecognizerRepresentable bridges a real multi-touch tap recognizer
+// into SwiftUI, which single-touch SwiftUI gestures can't express.
+struct MultiFingerTapGesture: UIGestureRecognizerRepresentable {
+    let fingers: Int
+    let action: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UITapGestureRecognizer {
+        let recognizer = UITapGestureRecognizer()
+        recognizer.numberOfTapsRequired = 1
+        recognizer.numberOfTouchesRequired = fingers
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UITapGestureRecognizer, context: Context) {
+        if recognizer.state == .ended {
+            action()
+        }
     }
 }
 

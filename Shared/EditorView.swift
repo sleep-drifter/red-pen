@@ -2,6 +2,9 @@ import SwiftUI
 
 // The full editor. Hosted by the main app (full screen cover) and by the
 // share extension (inside the share sheet) — identical experience in both.
+//
+// All chrome is native: NavigationStack with system top/bottom toolbars,
+// a segmented tool picker, and menus for per-tool options.
 struct EditorRootView: View {
     @ObservedObject var session: EditorSession
     let onFinished: (_ saved: Bool) -> Void
@@ -10,17 +13,19 @@ struct EditorRootView: View {
     @State private var saveError: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            if session.documents.count > 1 {
-                Filmstrip(session: session)
+        NavigationStack {
+            VStack(spacing: 0) {
+                if session.documents.count > 1 {
+                    Filmstrip(session: session)
+                }
+                CanvasView(session: session)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(8)
             }
-            CanvasView(session: session)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(8)
-            EditorToolbar(session: session)
+            .background(Color(.systemBackground))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
         }
-        .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .sheet(isPresented: $session.editingShapeText) {
             if let id = session.selectedShapeID {
@@ -38,56 +43,142 @@ struct EditorRootView: View {
         }
     }
 
-    private var topBar: some View {
-        HStack(spacing: 16) {
-            Button {
-                onFinished(false)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .background(Color.white.opacity(0.1), in: Circle())
+    // MARK: - Toolbars
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { onFinished(false) }
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+            if isSaving {
+                ProgressView()
+            } else {
+                Button("Save") { save() }
+                    .fontWeight(.semibold)
             }
+        }
 
-            Spacer()
-
-            Button { session.undo() } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 40, height: 40)
+        ToolbarItemGroup(placement: .bottomBar) {
+            if session.tool == .crop {
+                Button("Reset") { session.resetCrop() }
+                Spacer()
+                toolPicker
+                Spacer()
+                Button("Apply") { session.applyCrop() }
+                    .fontWeight(.semibold)
+            } else {
+                toolPicker
+                Spacer()
+                optionsMenu
             }
-            .disabled(!session.canUndo)
+        }
+    }
 
-            Button { session.redo() } label: {
-                Image(systemName: "arrow.uturn.forward")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 40, height: 40)
+    private var toolPicker: some View {
+        Picker("Tool", selection: $session.tool) {
+            ForEach(Tool.allCases) { tool in
+                Label(tool.title, systemImage: tool.systemImage)
+                    .tag(tool)
             }
-            .disabled(!session.canRedo)
+        }
+        .pickerStyle(.segmented)
+    }
 
-            Spacer()
-
-            Button {
-                save()
-            } label: {
-                Group {
-                    if isSaving {
-                        ProgressView()
-                    } else {
-                        Text("Save")
-                            .font(.system(size: 16, weight: .semibold))
+    private var optionsMenu: some View {
+        Menu {
+            switch session.tool {
+            case .pen:
+                Picker("Size", selection: $session.penSize) {
+                    ForEach(PenSize.allCases) { size in
+                        Text(size.title).tag(size)
                     }
                 }
-                .frame(minWidth: 64, minHeight: 40)
-                .background(Color.white, in: Capsule())
-                .foregroundColor(.black)
+                Picker("Color", selection: colorBinding) {
+                    ForEach(MarkupColor.allCases) { color in
+                        Text(color.title).tag(color)
+                    }
+                }
+                Toggle("90° Lines Only", isOn: $session.axisLock)
+            case .eraser:
+                Picker("Size", selection: $session.eraserSize) {
+                    ForEach(EraserSize.allCases) { size in
+                        Text(size.title).tag(size)
+                    }
+                }
+            case .shape:
+                Picker("Shape", selection: shapeKindBinding) {
+                    ForEach(ShapeKind.allCases) { kind in
+                        Label(kind.title, systemImage: kind.systemImage).tag(kind)
+                    }
+                }
+                Picker("Color", selection: colorBinding) {
+                    ForEach(MarkupColor.allCases) { color in
+                        Text(color.title).tag(color)
+                    }
+                }
+                Picker("Fill", selection: fillBinding) {
+                    ForEach(ShapeFill.allCases) { fill in
+                        Label(fill.title, systemImage: fill.systemImage).tag(fill)
+                    }
+                }
+                if session.selectedShapeID != nil {
+                    Divider()
+                    Button("Edit Text…", systemImage: "textformat") {
+                        session.editingShapeText = true
+                    }
+                    Button("Delete Shape", systemImage: "trash", role: .destructive) {
+                        session.deleteSelectedShape()
+                    }
+                }
+            case .crop:
+                EmptyView()
             }
-            .disabled(isSaving)
+        } label: {
+            Label("Options", systemImage: "slider.horizontal.3")
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
+
+    // Option bindings write the session default and, when a shape is
+    // selected, restyle that shape too (with an undo snapshot).
+    private var colorBinding: Binding<MarkupColor> {
+        Binding(
+            get: { session.color },
+            set: { newValue in
+                session.color = newValue
+                applyToSelectedShape { $0.color = newValue }
+            }
+        )
+    }
+
+    private var fillBinding: Binding<ShapeFill> {
+        Binding(
+            get: { session.fillStyle },
+            set: { newValue in
+                session.fillStyle = newValue
+                applyToSelectedShape { $0.fill = newValue }
+            }
+        )
+    }
+
+    private var shapeKindBinding: Binding<ShapeKind> {
+        Binding(
+            get: { session.shapeKind },
+            set: { newValue in
+                session.shapeKind = newValue
+                applyToSelectedShape { $0.kind = newValue }
+            }
+        )
+    }
+
+    private func applyToSelectedShape(_ transform: @escaping (inout ShapeAnnotation) -> Void) {
+        guard session.tool == .shape, let id = session.selectedShapeID else { return }
+        session.beginChange()
+        session.updateShape(id, transform)
+    }
+
+    // MARK: - Saving
 
     private func save() {
         isSaving = true
@@ -123,7 +214,7 @@ struct Filmstrip: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(index == session.selectedIndex ? Color.white : Color.white.opacity(0.2),
+                                .stroke(index == session.selectedIndex ? Color.accentColor : Color(.separator),
                                         lineWidth: index == session.selectedIndex ? 2 : 1)
                         )
                         .onTapGesture { session.selectDocument(index) }
@@ -131,229 +222,6 @@ struct Filmstrip: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-        }
-    }
-}
-
-// MARK: - Toolbar
-
-struct EditorToolbar: View {
-    @ObservedObject var session: EditorSession
-
-    var body: some View {
-        VStack(spacing: 10) {
-            contextualRow
-                .frame(minHeight: 44)
-            toolRow
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
-        .background(Color.white.opacity(0.06))
-    }
-
-    private var toolRow: some View {
-        HStack {
-            ForEach(Tool.allCases) { tool in
-                Button {
-                    session.tool = tool
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: tool.systemImage)
-                            .font(.system(size: 18, weight: .medium))
-                        Text(tool.title)
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(
-                        session.tool == tool ? Color.white.opacity(0.15) : .clear,
-                        in: RoundedRectangle(cornerRadius: 10)
-                    )
-                    .foregroundColor(session.tool == tool ? .white : .white.opacity(0.55))
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var contextualRow: some View {
-        switch session.tool {
-        case .pen:
-            HStack(spacing: 14) {
-                sizeDots(values: PenSize.allCases.map(\.rawValue),
-                         selected: session.penSize.rawValue) { value in
-                    if let size = PenSize(rawValue: value) { session.penSize = size }
-                }
-                divider
-                colorDots
-                divider
-                Button {
-                    session.axisLock.toggle()
-                } label: {
-                    Text("90°")
-                        .font(.system(size: 14, weight: .bold))
-                        .frame(width: 44, height: 32)
-                        .background(
-                            session.axisLock ? Color.white : Color.white.opacity(0.1),
-                            in: Capsule()
-                        )
-                        .foregroundColor(session.axisLock ? .black : .white)
-                }
-            }
-        case .eraser:
-            sizeDots(values: EraserSize.allCases.map(\.rawValue),
-                     selected: session.eraserSize.rawValue) { value in
-                if let size = EraserSize(rawValue: value) { session.eraserSize = size }
-            }
-        case .shape:
-            HStack(spacing: 14) {
-                ForEach(ShapeKind.allCases) { kind in
-                    Button {
-                        session.shapeKind = kind
-                        if let id = session.selectedShapeID {
-                            session.beginChange()
-                            session.updateShape(id) { $0.kind = kind }
-                        }
-                    } label: {
-                        Image(systemName: kind.systemImage)
-                            .font(.system(size: 18, weight: .medium))
-                            .frame(width: 36, height: 32)
-                            .background(
-                                session.shapeKind == kind ? Color.white.opacity(0.2) : .clear,
-                                in: RoundedRectangle(cornerRadius: 8)
-                            )
-                            .foregroundColor(.white)
-                    }
-                }
-                divider
-                colorDots
-                divider
-                fillStyleButtons
-                if session.selectedShapeID != nil {
-                    divider
-                    Button {
-                        session.editingShapeText = true
-                    } label: {
-                        Image(systemName: "textformat")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 36, height: 32)
-                            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                            .foregroundColor(.white)
-                    }
-                    Button(role: .destructive) {
-                        session.deleteSelectedShape()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 36, height: 32)
-                            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                            .foregroundColor(.red)
-                    }
-                }
-            }
-        case .crop:
-            HStack(spacing: 16) {
-                Button("Reset") { session.resetCrop() }
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white.opacity(0.8))
-                Button {
-                    session.applyCrop()
-                } label: {
-                    Text("Apply Crop")
-                        .font(.system(size: 15, weight: .semibold))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 7)
-                        .background(Color.white, in: Capsule())
-                        .foregroundColor(.black)
-                }
-            }
-        }
-    }
-
-    private var divider: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.15))
-            .frame(width: 1, height: 24)
-    }
-
-    private var colorDots: some View {
-        HStack(spacing: 10) {
-            ForEach(MarkupColor.allCases) { markupColor in
-                Button {
-                    session.color = markupColor
-                    if session.tool == .shape, let id = session.selectedShapeID {
-                        session.beginChange()
-                        session.updateShape(id) { $0.color = markupColor }
-                    }
-                } label: {
-                    Circle()
-                        .fill(markupColor.color)
-                        .frame(width: 24, height: 24)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: session.color == markupColor ? 2.5 : 0)
-                                .padding(-4)
-                        )
-                }
-            }
-        }
-    }
-
-    private var fillStyleButtons: some View {
-        HStack(spacing: 8) {
-            ForEach(ShapeFill.allCases) { style in
-                Button {
-                    session.fillStyle = style
-                    if let id = session.selectedShapeID {
-                        session.beginChange()
-                        session.updateShape(id) { $0.fill = style }
-                    }
-                } label: {
-                    fillPreview(style)
-                        .frame(width: 26, height: 26)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.white, lineWidth: session.fillStyle == style ? 2 : 0)
-                                .padding(-3)
-                        )
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func fillPreview(_ style: ShapeFill) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 6)
-        switch style {
-        case .opaque:
-            shape.fill(session.color.color)
-        case .transparent:
-            shape.fill(session.color.color.opacity(0.5))
-        case .none:
-            shape.strokeBorder(session.color.color, lineWidth: 2)
-        }
-    }
-
-    private func sizeDots(values: [CGFloat], selected: CGFloat,
-                          onSelect: @escaping (CGFloat) -> Void) -> some View {
-        HStack(spacing: 12) {
-            ForEach(values, id: \.self) { value in
-                let maxValue = values.max() ?? 1
-                let diameter = 8 + 16 * (value / maxValue)
-                Button {
-                    onSelect(value)
-                } label: {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: diameter, height: diameter)
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: selected == value ? 2 : 0)
-                        )
-                        .opacity(selected == value ? 1 : 0.5)
-                }
-            }
         }
     }
 }

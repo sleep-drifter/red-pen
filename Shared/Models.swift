@@ -35,6 +35,15 @@ enum PenSize: CGFloat, CaseIterable, Identifiable {
     case extraLarge = 16
 
     var id: CGFloat { rawValue }
+
+    var title: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        case .extraLarge: return "Extra Large"
+        }
+    }
 }
 
 enum EraserSize: CGFloat, CaseIterable, Identifiable {
@@ -44,6 +53,15 @@ enum EraserSize: CGFloat, CaseIterable, Identifiable {
     case extraLarge = 48
 
     var id: CGFloat { rawValue }
+
+    var title: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        case .extraLarge: return "Extra Large"
+        }
+    }
 }
 
 // MARK: - Colors
@@ -52,6 +70,8 @@ enum MarkupColor: String, CaseIterable, Identifiable {
     case red, blue, green, yellow
 
     var id: String { rawValue }
+
+    var title: String { rawValue.capitalized }
 
     var uiColor: UIColor {
         switch self {
@@ -89,8 +109,16 @@ enum ShapeFill: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .opaque: return "Opaque"
-        case .transparent: return "50%"
-        case .none: return "Outline"
+        case .transparent: return "50% Transparent"
+        case .none: return "No Fill (Outline)"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .opaque: return "square.fill"
+        case .transparent: return "square.lefthalf.filled"
+        case .none: return "square"
         }
     }
 }
@@ -102,6 +130,13 @@ enum ShapeKind: String, CaseIterable, Identifiable {
     case rectangle
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .roundedRectangle: return "Rounded Rectangle"
+        case .rectangle: return "Rectangle"
+        }
+    }
 
     var systemImage: String {
         switch self {

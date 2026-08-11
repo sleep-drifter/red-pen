@@ -58,12 +58,14 @@ final class EditorSession: ObservableObject, Identifiable {
     }
 
     func undo() {
+        activeStroke = nil // a multi-finger tap can leave a half-started stroke; discard it
         current.undo()
         selectedShapeID = nil
         if tool == .crop { prepareCropDraft() }
     }
 
     func redo() {
+        activeStroke = nil
         current.redo()
         selectedShapeID = nil
         if tool == .crop { prepareCropDraft() }
