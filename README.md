@@ -21,7 +21,7 @@ Then in Xcode:
 2. Change `bundleIdPrefix` in `project.yml` (and the two `PRODUCT_BUNDLE_IDENTIFIER`s) to your own identifier, then re-run `xcodegen generate`. The extension's bundle id must stay prefixed by the app's.
 3. Build and run the **RedPen** scheme on a device (share extensions are much easier to test on hardware).
 
-Requires iOS 17+.
+Requires iOS 26+.
 
 ## Make Red Pen show up front in the share sheet
 
