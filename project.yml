@@ -13,6 +13,16 @@ settings:
     MARKETING_VERSION: "1.0"
     CODE_SIGN_STYLE: Automatic
 
+schemes:
+  RedPen:
+    build:
+      targets:
+        RedPen: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
 targets:
   RedPen:
     type: application
