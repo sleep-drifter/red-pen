@@ -12,6 +12,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     MARKETING_VERSION: "1.0"
     CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: W5467D7VFN
 
 schemes:
   RedPen:
@@ -49,6 +50,7 @@ targets:
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
         ITSAppUsesNonExemptEncryption: false
         NSPhotoLibraryAddUsageDescription: Red Pen saves your marked-up screenshots to your photo library.
         NSPhotoLibraryUsageDescription: Red Pen only uses full library access to delete original screenshots after saving edited copies, and only when you ask it to.
