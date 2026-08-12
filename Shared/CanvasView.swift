@@ -43,6 +43,7 @@ struct CanvasView: View {
     @ObservedObject var session: EditorSession
 
     @State private var draftShapeRect: CGRect?
+    @State private var dragStartImagePoint: CGPoint?
     @State private var moveStartRect: CGRect?
     @State private var resizeStartRect: CGRect?
 
@@ -54,10 +55,15 @@ struct CanvasView: View {
 
             ZStack {
                 strokesLayer(doc: doc, t: t)
-                    .contentShape(Rectangle())
-                    .gesture(drawGesture(doc: doc, t: t))
-                    .gesture(MultiFingerTapGesture(fingers: 2) { session.undo() })
-                    .gesture(MultiFingerTapGesture(fingers: 3) { session.redo() })
+
+                TouchCanvas(
+                    onDragBegan: { p in dragBegan(at: p, doc: doc, t: t) },
+                    onDragMoved: { p in dragMoved(to: p, doc: doc, t: t) },
+                    onDragEnded: { dragEnded(doc: doc) },
+                    onTap: { p in tapped(at: p, doc: doc, t: t) },
+                    onTwoFingerTap: { session.undo() },
+                    onThreeFingerTap: { session.redo() }
+                )
 
                 ForEach(doc.shapes) { shape in
                     shapeView(shape, doc: doc, t: t)
@@ -120,59 +126,87 @@ struct CanvasView: View {
         }
     }
 
-    private func drawGesture(doc: MarkupDocument, t: CanvasTransform) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                let start = clamp(t.toImage(value.startLocation), to: doc.fullRect)
-                let point = clamp(t.toImage(value.location), to: doc.fullRect)
+    // MARK: - Touch handling (single-finger draw, multi-finger undo/redo)
 
-                switch session.tool {
-                case .pen:
-                    let end = session.axisLock ? snapTo90(point, from: start) : point
-                    if session.axisLock {
-                        session.activeStroke = Stroke(points: [start, end],
-                                                      width: session.penSize.rawValue * doc.pointScale,
-                                                      color: session.color, isEraser: false)
-                    } else if session.activeStroke == nil {
-                        session.activeStroke = Stroke(points: [start, end],
-                                                      width: session.penSize.rawValue * doc.pointScale,
-                                                      color: session.color, isEraser: false)
-                    } else {
-                        session.activeStroke?.points.append(end)
-                    }
-                case .eraser:
-                    if session.activeStroke == nil {
-                        session.activeStroke = Stroke(points: [start, point],
-                                                      width: session.eraserSize.rawValue * doc.pointScale,
-                                                      color: .red, isEraser: true)
-                    } else {
-                        session.activeStroke?.points.append(point)
-                    }
-                case .shape:
-                    draftShapeRect = normalizedRect(from: start, to: point)
-                case .crop:
-                    break
-                }
+    private func dragBegan(at p: CGPoint, doc: MarkupDocument, t: CanvasTransform) {
+        let start = clamp(t.toImage(p), to: doc.fullRect)
+        dragStartImagePoint = start
+
+        switch session.tool {
+        case .pen:
+            session.activeStroke = Stroke(points: [start],
+                                          width: session.penSize.rawValue * doc.pointScale,
+                                          color: session.color, isEraser: false)
+        case .eraser:
+            session.activeStroke = Stroke(points: [start],
+                                          width: session.eraserSize.rawValue * doc.pointScale,
+                                          color: .red, isEraser: true)
+        case .shape:
+            draftShapeRect = CGRect(origin: start, size: .zero)
+        case .crop:
+            break
+        }
+    }
+
+    private func dragMoved(to p: CGPoint, doc: MarkupDocument, t: CanvasTransform) {
+        guard let start = dragStartImagePoint else { return }
+        let point = clamp(t.toImage(p), to: doc.fullRect)
+
+        switch session.tool {
+        case .pen:
+            if session.axisLock {
+                session.activeStroke?.points = [start, snapTo90(point, from: start)]
+            } else {
+                session.activeStroke?.points.append(point)
             }
-            .onEnded { value in
-                switch session.tool {
-                case .pen, .eraser:
-                    session.commitActiveStroke()
-                case .shape:
-                    defer { draftShapeRect = nil }
-                    let minSide = 24 * doc.pointScale
-                    if let draft = draftShapeRect, draft.width > minSide / 2 || draft.height > minSide / 2 {
-                        var rect = draft
-                        rect.size.width = max(rect.width, minSide)
-                        rect.size.height = max(rect.height, minSide)
-                        session.addShape(rect: rect)
-                    } else {
-                        session.selectedShapeID = nil // tap on empty canvas deselects
-                    }
-                case .crop:
-                    break
-                }
+        case .eraser:
+            session.activeStroke?.points.append(point)
+        case .shape:
+            draftShapeRect = normalizedRect(from: start, to: point)
+        case .crop:
+            break
+        }
+    }
+
+    private func dragEnded(doc: MarkupDocument) {
+        defer { dragStartImagePoint = nil }
+
+        switch session.tool {
+        case .pen, .eraser:
+            session.commitActiveStroke()
+        case .shape:
+            defer { draftShapeRect = nil }
+            let minSide = 24 * doc.pointScale
+            if let draft = draftShapeRect, draft.width > minSide / 2 || draft.height > minSide / 2 {
+                var rect = draft
+                rect.size.width = max(rect.width, minSide)
+                rect.size.height = max(rect.height, minSide)
+                session.addShape(rect: rect)
             }
+        case .crop:
+            break
+        }
+    }
+
+    private func tapped(at p: CGPoint, doc: MarkupDocument, t: CanvasTransform) {
+        let point = clamp(t.toImage(p), to: doc.fullRect)
+
+        switch session.tool {
+        case .pen:
+            session.activeStroke = Stroke(points: [point],
+                                          width: session.penSize.rawValue * doc.pointScale,
+                                          color: session.color, isEraser: false)
+            session.commitActiveStroke()
+        case .eraser:
+            session.activeStroke = Stroke(points: [point],
+                                          width: session.eraserSize.rawValue * doc.pointScale,
+                                          color: .red, isEraser: true)
+            session.commitActiveStroke()
+        case .shape:
+            session.selectedShapeID = nil // tap on empty canvas deselects
+        case .crop:
+            break
+        }
     }
 
     // MARK: - Shapes
@@ -276,23 +310,95 @@ struct CanvasView: View {
     }
 }
 
-// Undo/redo are gesture-driven: two-finger tap = undo, three-finger tap = redo.
-// UIGestureRecognizerRepresentable bridges a real multi-touch tap recognizer
-// into SwiftUI, which single-touch SwiftUI gestures can't express.
-struct MultiFingerTapGesture: UIGestureRecognizerRepresentable {
-    let fingers: Int
-    let action: () -> Void
+// UIKit touch layer for the canvas. SwiftUI's DragGesture(minimumDistance: 0)
+// claims the first finger instantly, so multi-finger taps used to leave ink.
+// Here UIKit arbitrates instead:
+//   - drawing is a pan capped at ONE touch — a second finger means it never
+//     begins (or is cancelled), so undo/redo taps can't draw
+//   - single-finger tap = dot (pen/eraser) or deselect (shape)
+//   - two-finger tap = undo, three-finger tap = redo
+struct TouchCanvas: UIViewRepresentable {
+    var onDragBegan: (CGPoint) -> Void
+    var onDragMoved: (CGPoint) -> Void
+    var onDragEnded: () -> Void
+    var onTap: (CGPoint) -> Void
+    var onTwoFingerTap: () -> Void
+    var onThreeFingerTap: () -> Void
 
-    func makeUIGestureRecognizer(context: Context) -> UITapGestureRecognizer {
-        let recognizer = UITapGestureRecognizer()
-        recognizer.numberOfTapsRequired = 1
-        recognizer.numberOfTouchesRequired = fingers
-        return recognizer
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isMultipleTouchEnabled = true
+
+        let pan = UIPanGestureRecognizer(target: context.coordinator,
+                                         action: #selector(Coordinator.pan(_:)))
+        pan.maximumNumberOfTouches = 1
+
+        let tap = UITapGestureRecognizer(target: context.coordinator,
+                                         action: #selector(Coordinator.tap(_:)))
+        tap.numberOfTouchesRequired = 1
+
+        let twoFingerTap = UITapGestureRecognizer(target: context.coordinator,
+                                                  action: #selector(Coordinator.twoFingerTap(_:)))
+        twoFingerTap.numberOfTouchesRequired = 2
+
+        let threeFingerTap = UITapGestureRecognizer(target: context.coordinator,
+                                                    action: #selector(Coordinator.threeFingerTap(_:)))
+        threeFingerTap.numberOfTouchesRequired = 3
+
+        twoFingerTap.require(toFail: threeFingerTap)
+
+        [pan, tap, twoFingerTap, threeFingerTap].forEach(view.addGestureRecognizer)
+        return view
     }
 
-    func handleUIGestureRecognizerAction(_ recognizer: UITapGestureRecognizer, context: Context) {
-        if recognizer.state == .ended {
-            action()
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    final class Coordinator: NSObject {
+        var parent: TouchCanvas
+
+        init(_ parent: TouchCanvas) {
+            self.parent = parent
+        }
+
+        @objc func pan(_ recognizer: UIPanGestureRecognizer) {
+            let location = recognizer.location(in: recognizer.view)
+            switch recognizer.state {
+            case .began:
+                // The pan begins after ~10pt of hysteresis; reconstruct the
+                // original touch-down point so strokes start where the finger did.
+                let translation = recognizer.translation(in: recognizer.view)
+                parent.onDragBegan(CGPoint(x: location.x - translation.x,
+                                           y: location.y - translation.y))
+                parent.onDragMoved(location)
+            case .changed:
+                parent.onDragMoved(location)
+            case .ended, .cancelled, .failed:
+                parent.onDragEnded()
+            default:
+                break
+            }
+        }
+
+        @objc func tap(_ recognizer: UITapGestureRecognizer) {
+            guard recognizer.state == .ended else { return }
+            parent.onTap(recognizer.location(in: recognizer.view))
+        }
+
+        @objc func twoFingerTap(_ recognizer: UITapGestureRecognizer) {
+            guard recognizer.state == .ended else { return }
+            parent.onTwoFingerTap()
+        }
+
+        @objc func threeFingerTap(_ recognizer: UITapGestureRecognizer) {
+            guard recognizer.state == .ended else { return }
+            parent.onThreeFingerTap()
         }
     }
 }
