@@ -28,11 +28,19 @@ targets:
     type: application
     platform: iOS
     sources:
-      - App
+      - path: App
+        excludes:
+          - AppIcon.icon
       - Shared
+      # Icon Composer bundle; must be a single file reference in the
+      # resources phase so actool compiles it as the app icon.
+      - path: App/AppIcon.icon
+        buildPhase: resources
+        type: file
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.redpen.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: App/Info.plist
       properties:
