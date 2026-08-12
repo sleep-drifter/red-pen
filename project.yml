@@ -1,6 +1,6 @@
 name: RedPen
 options:
-  bundleIdPrefix: com.example.redpen
+  bundleIdPrefix: com.mattwujek.redpen
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
@@ -39,7 +39,7 @@ targets:
         type: file
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.redpen.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.mattwujek.redpen.app
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: App/Info.plist
@@ -49,6 +49,7 @@ targets:
         UIUserInterfaceStyle: Dark
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        ITSAppUsesNonExemptEncryption: false
         NSPhotoLibraryAddUsageDescription: Red Pen saves your marked-up screenshots to your photo library.
         NSPhotoLibraryUsageDescription: Red Pen only uses full library access to delete original screenshots after saving edited copies, and only when you ask it to.
     dependencies:
@@ -62,12 +63,13 @@ targets:
       - Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.redpen.app.share
+        PRODUCT_BUNDLE_IDENTIFIER: com.mattwujek.redpen.app.share
     info:
       path: ShareExtension/Info.plist
       properties:
         CFBundleDisplayName: Red Pen
         UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
         NSPhotoLibraryAddUsageDescription: Red Pen saves your marked-up screenshots to your photo library.
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
