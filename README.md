@@ -57,6 +57,13 @@ If screenshots already landed in your library, use the main app instead: **Pick 
 - **Native UI** — system navigation and toolbars (Liquid Glass on iOS 26), segmented tool picker, native menus for tool options
 - **Dark mode only**
 
+## TestFlight
+
+CI is Xcode Cloud: every push to `main` archives the app and uploads it to
+TestFlight internal testing. The `.xcodeproj` is not committed, so
+`ci_scripts/ci_post_clone.sh` regenerates it with XcodeGen on the build
+runner before Xcode Cloud builds.
+
 ## Architecture
 
 | Path | What it is |
